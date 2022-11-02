@@ -24,20 +24,111 @@ md"""
 	Draft!!!
 """
 
-# ╔═╡ a71b0cd3-598e-4a46-a5b0-a27f681d2150
-# @variables t [unit = u"hr"] G(t) [unit = u"mol/m^3"] M(t) [unit = u"mol/m^3"] N(t) [unit = u"mol/m^3"] X(t) [unit = u"mol/m^3"] E(t) [unit = u"mol/m^3"] T(t) [unit = u"K"]
+# ╔═╡ d654cb26-f5e6-4848-a67d-13448e4a40eb
+PlutoUI.TableOfContents()
+
+# ╔═╡ 65be7870-4d71-47a4-91fc-2de058c21d95
+md"""
+# Modelización de fermentación de cerveza por lotes
+
+J. Arántegui
+
+## Resumen
+
+En este artículo vamos a ver como se puede simular de una manera muy sencilla la fermentación de cerveza en estado no estacionario, es decir, por lotes. El modelo utiliza tres ecuaciones diferenciales ordinarias para describir la evolución de la glucosa, maltosa y maltotriosa. Las cinéticas de crecimiento siguen cinéticas de Monod y las constantes ciéticas siguen la ecuación de Arrhenius. Además se realzia el balance macroscópico de energía.
+
+Los cálculos se realizan utilizando el lenguaje de programación _Julia_ y la librería _ModelingToolkit.jl_, que simplifica mucho la resolución numérica de las ecuaciones diferenciales. Para evitar problemas con las unidades, se utiliza el paquete _Unitful.jl_. Además se muestra como se puede realizar una simulación interactiva utilizando _PlutoUI.jl_.
+"""
+
+# ╔═╡ 7312c6cd-5eb3-4f19-a8dc-e4ea0e824b34
+md"""
+## Modelo matemático
+
+El modelo matemático que utilizaremos en la simulación es el desarrollado por D.A. Gee y W.F. Ramirez. La referencia completa es:
+
+Gee, D.A. and Ramirez, W.F. (1988), Optimal temperature control for batch beer fermentation. Biotechnol. Bioeng., 31: 224-234. [https://doi.org/10.1002/bit.260310308](https://doi.org/10.1002/bit.260310308)
+
+Aunque iremos comentando los principales detalles del modelo, es muy aconsejable leer la fuente original.
+
+El modelo matemático se compone de 17 ecuaciones:
+
+!!! warning
+
+	Aquí faltan un montón de ecuaciones...
+
+Encontramos las siguientes variables dependientes del tiempo:
+
+-  $G(t)$: Concentración de glucosa (mol/m³)
+
+-  $M(t)$: Concentración de maltosa (mol/m³)
+
+-  $N(t)$: Concentración de Maltotriosa (mol/m³)
+
+-  $X(t)$: Concentración de biomasa (mol/m³)
+
+-  $E(t)$: Concentración de etanol (mol/m³)
+
+-  $T(t)$: Temperatura del fermentador (K)
+
+
+Además el modelo tiene toda una serie de parámtros, que pueden ser const...
+
+!!! warning
+
+	Falta la explicación del resto de parámetros del modelo.
+"""
+
+# ╔═╡ 02bf4118-6d7e-46a1-a0e2-b1058d43c6ce
+md"""
+## Programación del modelo matemático
+
+Ya tenemos todas las ecuaciones que queremos resolver numéricamente para poder ver como evolucionan las diferentes variables con el tiempo.
+
+En primer lugar, cargaremos los paquetes necesarios. Son los siguientes:
+
+- **ModelingToolkit.jl**: Lo utilizaremos para programar las ecuaciones simbólicamente. Además simplificará automáticamente el modelo para que sea más sencillo de resolver. También calculará el jacobiano del modelo automáticamente para que la simulación funciones mejor desde un punto de vista numérico.
+
+- **DifferentialEquations.jl**: Una vez tengamos el modelo preparalo, esta libería nos permitirá resolver el sistema de ecuaciones diferenciales con solo un part de líneas de código.
+
+- **Plots.jl**: Para representar gráficamente las soluciones de la simulación.
+
+- **Unitful.jl**: Preocuparse de la unidades es siempre un dolor de cabeza. Este paquete relizará los factores de conversión por nosotros, para asegurarnos que trabajamos en el SI. En la referencia del modelo hay una mezcla de kJ y kcal, por ejemplo.
+
+- **PlutoUI.jl**: Nos permitirá crear un interface muy sencillo para explorar la solución.
+
+!!! warning
+
+	Instalar y precompilar los paquetes que vamos a utilizar puede requerir unos cuantos minutos. Las siguientes veces va más rápido.
+"""
+
+# ╔═╡ 49c3bf8d-37f8-4be0-98fe-35a9e1b10085
+md"""
+Una vez tenemos todo listo, vamos a crear las variables del modelo. En ModellingToolkit.jl las variables son el tiempo (la variable independiente) y las funciones que dependen del tiempo.
+"""
 
 # ╔═╡ 4918c59f-c3e6-4c7d-897d-9a67f34856e9
 @variables t G(t) M(t) N(t) X(t) E(t) T(t)
 
+# ╔═╡ ac55b21c-4d75-440d-b978-0e2343aa7334
+md"""
+También definiremos el operador $\frac{\mathrm{d}}{\mathrm{d}t}$, para simplificar la escritura de las ecuaciones diferenciales:
+"""
+
 # ╔═╡ 329c2926-3d4c-4885-9ac6-dcdd5b895106
 D = Differential(t)
 
-# ╔═╡ 150f4a4f-3391-4d84-a4f5-dec18aed4ad1
-# @parameters V_Go [unit = u"hr^-1"] V_Mo [unit = u"hr^-1"] V_No [unit = u"hr^-1"] K_Go [unit = u"mol/m^3"] K_Mo [unit = u"mol/m^3"] K_No [unit = u"mol/m^3"] K´_Go [unit = u"mol/m^3"] K´_Mo [unit = u"mol/m^3"] Ea_VG [unit = u"J/mol"] Ea_VM [unit = u"J/mol"] Ea_VN [unit = u"J/mol"] Ea_KG [unit = u"J/mol"] Ea_KM [unit = u"J/mol"] Ea_KN [unit = u"J/mol"] Ea_K´G [unit = u"J/mol"] Ea_K´M [unit = u"J/mol"] R_Xg R_Xm R_Xn R_Eg R_Em R_En X₀ [unit = u"mol/m^3"] G₀ [unit = u"mol/m^3"] M₀ [unit = u"mol/m^3"] N₀ [unit = u"mol/m^3"] E₀ [unit = u"mol/m^3"] T₀ [unit = u"K"] H_G [unit = u"J/mol"] H_M [unit = u"J/mol"] H_N [unit = u"J/mol"] u [unit = u"J/(hr*m^3*K)"] Tc [unit = u"K"] ρ [unit = u"kg/m^3"] Cp [unit = u"J/kg/K"] R [unit = u"J/K/mol"]
+# ╔═╡ 8a529703-c1fa-4aab-9eba-02ec65f1bb4c
+md"""
+El siguiente paso es definir los parámetros del modelo matemático. Es importante destacar que no estamos dando valores a las constantes. En esta etapa todo el trabajo que estamos realizando es simbólico:
+"""
 
 # ╔═╡ 45c2a6c0-236c-4f9a-b971-ed4c1f506475
 @parameters V_Go V_Mo V_No K_Go K_Mo K_No K´_Go K´_Mo Ea_VG Ea_VM Ea_VN  Ea_KG  Ea_KM Ea_KN Ea_K´G Ea_K´M R_Xg R_Xm R_Xn R_Eg R_Em R_En X₀ G₀ M₀ N₀ E₀ T₀ H_G H_M H_N u Tc ρ Cp R
+
+# ╔═╡ 2acd3464-1be3-4e50-bb51-a44fe0be0482
+md"""
+Como varias de las constantes siguen la cinética de Michaeles-Menten (o de Monod) con o sin inhibición, definimos las siguientes funciones auxiliares:
+"""
 
 # ╔═╡ 9744844a-fc23-4eb6-9aab-e8ec423eb997
 mm(μ, K, f) = μ*f/(K + f)
@@ -45,8 +136,23 @@ mm(μ, K, f) = μ*f/(K + f)
 # ╔═╡ 988b4422-687c-43a6-b01d-cb289e8a3c98
 lm(K, f) = K/(K+f)
 
+# ╔═╡ 90f6849d-b37f-4510-9d72-2d320f0e228e
+md"""
+Además definimos una función con la ecuación de Arrhenius:
+"""
+
 # ╔═╡ 3b872e0e-8e64-4fe0-8f0b-e22a86453303
 arr(A, Ea, T) = A*exp(-Ea/(R*T))
+
+# ╔═╡ fa19f0dc-21db-4e91-874d-a6e9961146e0
+md"""
+Con estas funciones auxiliares ya podemos definicr las cinéticas de metabolización de los azúcares (ecs. 4 a 6 del modelo):
+"""
+
+# ╔═╡ 96067665-d64b-4a30-a47b-a54a1ee353c8
+md"""
+La dependencia con la temperatura de las constantes cinéticas y de inhibición se corresponden con las ecuaciones (ecs. 11 a 13 por 3 azúcares, es decir, 8 ecuaciones ya que no existe la constante $K_N'$):
+"""
 
 # ╔═╡ 759af99f-6d2c-4417-b58e-6ad32d5c5227
 V_G(T) = arr(V_Go, Ea_VG, T)
@@ -81,6 +187,13 @@ K´_M(T) = arr(K´_Mo, Ea_K´M, T)
 # ╔═╡ 3aa1a9e0-2e51-40d7-a242-4bd6da064f1c
 μ₃(T) = mm(V_N(T), K_N(T), N)*lm(K´_G(T), G)*lm(K´_M(T), M)
 
+# ╔═╡ 06b7b48b-3a2c-4c43-b869-b4c73c6171be
+md"""
+Ya solo queda escribir las 3 ecuaciones diferenciales con las cinéticas de destrucción de los azúcares (ecs. 1 a 3), el balance de energía (ec. 9) y las ecuaciones de generación de biomasa (ec. 7) y etanol (ec. 8).
+
+Es importante destacar que cuando se escriben las ecuaciones hay que utilizar `~` en lugar del `=`. Por lo demás, la escrtura es prácticamente copiar las ecuaciones:
+"""
+
 # ╔═╡ 61667123-2b38-4057-a523-7cdae2d88980
 @named sys = ODESystem([
 	D(G) ~ -μ₁(T)*X,
@@ -91,8 +204,31 @@ K´_M(T) = arr(K´_Mo, Ea_K´M, T)
 	D(T) ~ 1/(ρ*Cp)*(H_G*D(G) + H_M*D(M) + H_N*D(N) - u*(T-Tc))
 ])
 
+# ╔═╡ d12d586e-da0c-49dd-b69b-f6f727549594
+md"""
+Ya tenemos el modelo matemático a simular. _ModellingToolkit.jl_ ha hecho su trabajo de sustituir las diferentes funciones auxiliares en las ecuaciones. Hemos llamado al modelo matemático `sys`.
+
+Se puede apreciar que el modelo matemático es basante complejo. ¿Se podría simplificar? ¿Podríamos tener un modelo equivalemnte más sencillo?
+
+Aquí es donde viene la magia de _ModellingToolkit.jl_, no solo simplifica la tarea de programación del modelo. También es capaza de simplificar el modelo de manera automáticva utilizando una sola instrucción, `structural_simplify`:
+"""
+
 # ╔═╡ 8711a396-50fc-44b0-a1bd-1decccba007d
 ssys = structural_simplify(sys)
+
+# ╔═╡ 2a20d8ec-ae51-474b-bdbc-37bb57fe04f7
+md"""
+¡Guau! Ahora tenemos un modelo más sencillo a resolver. El modelo matemático simplificado lo hemos llamado `ssys`.
+
+¿Qué pasa con el resto de variables? _ModellingToolkit.jl_ lleva la cuenta y cuando tengamos la simulación realizada calculará las variables que no aparezcan en el modelo simplificado. Lo bueno es que todo esto es transparente al usuario.
+"""
+
+# ╔═╡ de310fe7-22b5-4500-9681-07f25060bd8a
+md"""
+## Simulación
+
+Empezaremos definiendo todas las constantes del modelo junto con sus unidades, son los datos tal como aparecen en el artículo original. Con `upreferred` hacemos la conversión al sistema internacional, así nos aseguramos tener un sistema de unidades coherente. La función `ustrip` elimina las unidades para simplificar la resolución numérica de las ecuaciones, no es problema ya que nos hemos asegurado tener todas las unidades en SI:
+"""
 
 # ╔═╡ f97cc6f9-adda-4c50-ab5b-c4b0c7437f7a
 p = [V_Go => exp(35.77)*u"hr^-1" |>ustrip,
@@ -132,6 +268,11 @@ p = [V_Go => exp(35.77)*u"hr^-1" |>ustrip,
 	Cp => 4016u"J/kg/K" |>ustrip,
 	R => 1u"R" |>ustrip]
 
+# ╔═╡ d26904a2-55d4-4784-a6a5-382e813ce4b5
+md"""
+Definimos las condiciones iniciales:
+"""
+
 # ╔═╡ 34f62360-c3d9-4faf-9fa3-9f19566853a8
 u0 = [G => G₀,
 	M => M₀,
@@ -140,23 +281,60 @@ u0 = [G => G₀,
 	E => E₀,
 	T => T₀]
 
+# ╔═╡ 19a0141f-2fde-44ba-bc7e-eed58d735581
+md"""
+El tiempo de simulación será de 180 h:
+"""
+
 # ╔═╡ 1ad39294-ba40-45da-afa2-fbf903df119a
 tspan = (0.0, 180.0) #u"hr"
+
+# ╔═╡ 024e7a8f-cad2-4468-8c5b-2352867789e2
+md"""
+Ya solo queda crear el problema que se deberá resolver numéricamente a partir del modelo simbólico `ssys`, utilizando `u0`como condiciones inciales y `tspan` como tiempo de simulación. Además con `jac=true` queremos que se calcule el jacobiano automáticamante. El problema lo hemos llamado `prob`:
+"""
 
 # ╔═╡ 57cb5d3d-9298-4d06-b45d-d55aead7b412
 prob = ODEProblem(ssys, u0, tspan, p, jac=true)
 
+# ╔═╡ 73629fc7-fb11-47e2-b5b4-43b7d9f1ee6e
+md"""
+¿Por qué la creación el problema es independiente del cálculo de la simulación? Porque si queremos repetir la simuación con diferentes parámtetros, por ejemplo, no es necesario tener que volver a definir el problema, lo que hace más rápido el hacer varias simulaciones a partir de un mismo problema.
+
+Finalmente, ya solo queda resolver numéricamente las ecuaciones diferenciales:
+"""
+
 # ╔═╡ 2c93097e-7e44-42cf-8526-671d8d61add6
 sol = solve(prob, AutoVern7(Rodas4()))
 
+# ╔═╡ 25f11a36-5afb-4b62-9d39-4f769846267f
+md"""
+¡Ya tenemos el trabajo hecho!
+
+Ahora vamos a ver como evolucionan las concentraciones de los azúcares:
+"""
+
 # ╔═╡ 04ecbf45-62a6-4a52-9f1f-993b861d7e21
 plot(sol, idxs=[G M N])
+
+# ╔═╡ 35b5f795-c37d-46a9-8c16-c5f5f26da4ae
+md"""
+Las variables $E$ y $X$ no aparecen en el modelo simplificado y, por lo tanto, tampoco en la solución, pero se pueden obtener de manera transparente. Nada parece indicar que no se han calculado al resolver las ecuaciones diferenciales.
+"""
 
 # ╔═╡ 67d35fd0-dbd6-4d73-bdce-2a6a7372c117
 plot(sol, idxs=[X E], legend=:topleft)
 
 # ╔═╡ 6548872c-d52e-4a38-a20f-1d74bdebd224
 plot(sol, idxs=T, legend=:bottomright)
+
+# ╔═╡ e620dae4-3e0f-497f-bb16-1ab31f9ea7d8
+md"""
+## Exploración interactiva
+
+!!! warning
+	Esto no puede aparece aquí, ya que es una página estática. Tengo que ver como mostrar la interactivadad.
+"""
 
 # ╔═╡ 9f7eda20-87f1-4ae6-b9bc-dbb3f314cf67
 function newsimul(u)
@@ -173,6 +351,19 @@ u = $(@bind unew Slider(0:100:2400, show_value=true))
 
 # ╔═╡ 83232adf-f1f6-417e-9236-5e6b1acdbe6a
 newsimul(unew)
+
+# ╔═╡ e29444c0-bbca-453e-918b-94bd66f91c02
+md"""
+---
+
+Celdas a eliminar (seguramente):
+"""
+
+# ╔═╡ a71b0cd3-598e-4a46-a5b0-a27f681d2150
+# @variables t [unit = u"hr"] G(t) [unit = u"mol/m^3"] M(t) [unit = u"mol/m^3"] N(t) [unit = u"mol/m^3"] X(t) [unit = u"mol/m^3"] E(t) [unit = u"mol/m^3"] T(t) [unit = u"K"]
+
+# ╔═╡ 150f4a4f-3391-4d84-a4f5-dec18aed4ad1
+# @parameters V_Go [unit = u"hr^-1"] V_Mo [unit = u"hr^-1"] V_No [unit = u"hr^-1"] K_Go [unit = u"mol/m^3"] K_Mo [unit = u"mol/m^3"] K_No [unit = u"mol/m^3"] K´_Go [unit = u"mol/m^3"] K´_Mo [unit = u"mol/m^3"] Ea_VG [unit = u"J/mol"] Ea_VM [unit = u"J/mol"] Ea_VN [unit = u"J/mol"] Ea_KG [unit = u"J/mol"] Ea_KM [unit = u"J/mol"] Ea_KN [unit = u"J/mol"] Ea_K´G [unit = u"J/mol"] Ea_K´M [unit = u"J/mol"] R_Xg R_Xm R_Xn R_Eg R_Em R_En X₀ [unit = u"mol/m^3"] G₀ [unit = u"mol/m^3"] M₀ [unit = u"mol/m^3"] N₀ [unit = u"mol/m^3"] E₀ [unit = u"mol/m^3"] T₀ [unit = u"K"] H_G [unit = u"J/mol"] H_M [unit = u"J/mol"] H_N [unit = u"J/mol"] u [unit = u"J/(hr*m^3*K)"] Tc [unit = u"K"] ρ [unit = u"kg/m^3"] Cp [unit = u"J/kg/K"] R [unit = u"J/K/mol"]
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -197,7 +388,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.2"
 manifest_format = "2.0"
-project_hash = "4aeb24453ea4dad290f9901ac9c6dddc5e0f4cd4"
+project_hash = "e65cc1e0623f73d1d848f47e1c6eb637a3ccbced"
 
 [[deps.AbstractAlgebra]]
 deps = ["GroupsCore", "InteractiveUtils", "LinearAlgebra", "MacroTools", "Markdown", "Random", "RandomExtensions", "SparseArrays", "Test"]
@@ -2060,18 +2251,27 @@ version = "1.4.1+0"
 
 # ╔═╡ Cell order:
 # ╟─4e6362ba-89e0-4ae5-b04d-9ff0dfe78f5f
+# ╠═d654cb26-f5e6-4848-a67d-13448e4a40eb
+# ╟─65be7870-4d71-47a4-91fc-2de058c21d95
+# ╟─7312c6cd-5eb3-4f19-a8dc-e4ea0e824b34
+# ╟─02bf4118-6d7e-46a1-a0e2-b1058d43c6ce
 # ╠═616279ae-3a60-11ed-1f65-89c35eb44343
-# ╟─a71b0cd3-598e-4a46-a5b0-a27f681d2150
+# ╟─49c3bf8d-37f8-4be0-98fe-35a9e1b10085
 # ╠═4918c59f-c3e6-4c7d-897d-9a67f34856e9
-# ╟─329c2926-3d4c-4885-9ac6-dcdd5b895106
-# ╟─150f4a4f-3391-4d84-a4f5-dec18aed4ad1
+# ╟─ac55b21c-4d75-440d-b978-0e2343aa7334
+# ╠═329c2926-3d4c-4885-9ac6-dcdd5b895106
+# ╟─8a529703-c1fa-4aab-9eba-02ec65f1bb4c
 # ╠═45c2a6c0-236c-4f9a-b971-ed4c1f506475
+# ╟─2acd3464-1be3-4e50-bb51-a44fe0be0482
 # ╠═9744844a-fc23-4eb6-9aab-e8ec423eb997
 # ╠═988b4422-687c-43a6-b01d-cb289e8a3c98
+# ╟─90f6849d-b37f-4510-9d72-2d320f0e228e
 # ╠═3b872e0e-8e64-4fe0-8f0b-e22a86453303
+# ╟─fa19f0dc-21db-4e91-874d-a6e9961146e0
 # ╠═bc9dd7c9-d2bc-4824-b8fe-6a8fcd28c980
 # ╠═9fc25d16-1c05-4919-b391-268f2fc61823
 # ╠═3aa1a9e0-2e51-40d7-a242-4bd6da064f1c
+# ╟─96067665-d64b-4a30-a47b-a54a1ee353c8
 # ╠═759af99f-6d2c-4417-b58e-6ad32d5c5227
 # ╠═7163a976-a4df-4b1e-86c4-e70cd5384650
 # ╠═3438b410-3b23-43ab-85c1-10f0ea8db3d4
@@ -2080,18 +2280,32 @@ version = "1.4.1+0"
 # ╠═18e67836-ba95-4c03-ae93-2373c0f54c90
 # ╠═ac3343ca-c0da-4f2e-bc5c-88bfef08c114
 # ╠═5adbccc4-f6e9-4f02-8343-7b93d396c394
+# ╟─06b7b48b-3a2c-4c43-b869-b4c73c6171be
 # ╠═61667123-2b38-4057-a523-7cdae2d88980
+# ╟─d12d586e-da0c-49dd-b69b-f6f727549594
 # ╠═8711a396-50fc-44b0-a1bd-1decccba007d
+# ╟─2a20d8ec-ae51-474b-bdbc-37bb57fe04f7
+# ╟─de310fe7-22b5-4500-9681-07f25060bd8a
 # ╠═f97cc6f9-adda-4c50-ab5b-c4b0c7437f7a
+# ╟─d26904a2-55d4-4784-a6a5-382e813ce4b5
 # ╠═34f62360-c3d9-4faf-9fa3-9f19566853a8
+# ╟─19a0141f-2fde-44ba-bc7e-eed58d735581
 # ╠═1ad39294-ba40-45da-afa2-fbf903df119a
+# ╟─024e7a8f-cad2-4468-8c5b-2352867789e2
 # ╠═57cb5d3d-9298-4d06-b45d-d55aead7b412
+# ╟─73629fc7-fb11-47e2-b5b4-43b7d9f1ee6e
 # ╠═2c93097e-7e44-42cf-8526-671d8d61add6
+# ╟─25f11a36-5afb-4b62-9d39-4f769846267f
 # ╠═04ecbf45-62a6-4a52-9f1f-993b861d7e21
+# ╟─35b5f795-c37d-46a9-8c16-c5f5f26da4ae
 # ╠═67d35fd0-dbd6-4d73-bdce-2a6a7372c117
 # ╠═6548872c-d52e-4a38-a20f-1d74bdebd224
+# ╟─e620dae4-3e0f-497f-bb16-1ab31f9ea7d8
 # ╠═9f7eda20-87f1-4ae6-b9bc-dbb3f314cf67
 # ╟─2da9ccb1-6a3f-4b9d-a6d5-aff178b308a7
 # ╠═83232adf-f1f6-417e-9236-5e6b1acdbe6a
+# ╟─e29444c0-bbca-453e-918b-94bd66f91c02
+# ╠═a71b0cd3-598e-4a46-a5b0-a27f681d2150
+# ╠═150f4a4f-3391-4d84-a4f5-dec18aed4ad1
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
