@@ -17,13 +17,6 @@ end
 # ╔═╡ 616279ae-3a60-11ed-1f65-89c35eb44343
 using ModelingToolkit, DifferentialEquations, Plots, Unitful, PlutoUI
 
-# ╔═╡ 4e6362ba-89e0-4ae5-b04d-9ff0dfe78f5f
-md"""
-!!! warning
-
-	Draft!!!
-"""
-
 # ╔═╡ d654cb26-f5e6-4848-a67d-13448e4a40eb
 PlutoUI.TableOfContents()
 
@@ -35,9 +28,11 @@ J. Arántegui
 
 ## Resumen
 
-En este artículo vamos a ver como se puede simular de una manera muy sencilla la fermentación de cerveza en estado no estacionario, es decir, por lotes. El modelo utiliza tres ecuaciones diferenciales ordinarias para describir la evolución de la glucosa, maltosa y maltotriosa. Las cinéticas de crecimiento siguen cinéticas de Monod y las constantes ciéticas siguen la ecuación de Arrhenius. Además se realzia el balance macroscópico de energía.
+En este artículo vamos a ver como se puede simular de una manera muy sencilla la fermentación de cerveza en estado no estacionario, es decir, por lotes. El modelo utiliza tres ecuaciones diferencialeçs ordinarias para describir la evolución de la glucosa, maltosa y maltotriosa. Las cinéticas de crecimiento siguen cinéticas de Monod y las constantes cinéticas siguen la ecuación de Arrhenius. Además se realzia el balance macroscópico de energía.
 
 Los cálculos se realizan utilizando el lenguaje de programación _Julia_ y la librería _ModelingToolkit.jl_, que simplifica mucho la resolución numérica de las ecuaciones diferenciales. Para evitar problemas con las unidades, se utiliza el paquete _Unitful.jl_. Además se muestra como se puede realizar una simulación interactiva utilizando _PlutoUI.jl_.
+
+**Palabras clave:** ecuaciones diferenciales, fermentación, modelización, simulación, julia
 """
 
 # ╔═╡ 7312c6cd-5eb3-4f19-a8dc-e4ea0e824b34
@@ -50,11 +45,23 @@ Gee, D.A. and Ramirez, W.F. (1988), Optimal temperature control for batch beer f
 
 Aunque iremos comentando los principales detalles del modelo, es muy aconsejable leer la fuente original.
 
-El modelo matemático se compone de 17 ecuaciones:
+El modelo matemático se compone de 19 ecuaciones:
 
-!!! warning
-
-	Aquí faltan un montón de ecuaciones...
+$$\begin{align}
+\frac{\mathrm{d} G}{\mathrm{d}t} &= -\mu_1 X &(1)\\
+\frac{\mathrm{d} M}{\mathrm{d}t} &= -\mu_2 X  &(2)\\
+\frac{\mathrm{d} N}{\mathrm{d}t} &= -\mu_3 X  &(3)\\
+\mu_1 &= \frac{\mu_G G}{K_G+G}  &(4)\\
+\mu_2 &= \frac{\mu_M}{K_M+M} \frac{K_G'}{K_G' +G}  &(5)\\
+\mu_3 &= \frac{\mu_N N}{K_N+N} \frac{K_G'}{K_G'+G} \frac{K_M'}{K_M'+M} &(6)\\
+X(t) &= X(t_0) +R_{X_G}[G(t_0)-G(t)]+R_{X_M}[M(t_0)-M(t)]+R_{X_N}[N(t_0)-N(t)] &(7)\\
+E(t) &= R_{E_G}[G(t_0)-G(t)]+R_{E_M}[M(t_0)-M(t)]+R_{E_N}[N(t_0)-N(t)] &(8)\\
+\frac{\mathrm{d} T}{\mathrm{d}t} &= \frac{1}{\rho C_p} [-X (\Delta H_{FG}\mu_1+\Delta H_{FM}\mu_2+\Delta H_{FN}\mu_3)-u(T-T_c)] &(9)\\
+u &= \frac{U A}{V} &(10)\\
+V_i &= V_{i0} \exp(-E_{V_i}/R T^2), i = G, M, N &(11)\\
+K_i &= K_{i0} \exp(-E_{K_i}/R T^2), i = G, M, N &(12)\\
+K_i' &= K_{i0} \exp(-E_{K_i'}/R T^2), i = G, M, N &(13)
+\end{align}$$
 
 Encontramos las siguientes variables dependientes del tiempo:
 
@@ -70,12 +77,41 @@ Encontramos las siguientes variables dependientes del tiempo:
 
 -  $T(t)$: Temperatura del fermentador (K)
 
+Además el modelo tiene toda una serie de parámetros:
 
-Además el modelo tiene toda una serie de parámtros, que pueden ser const...
+-  $\mu_i$: Velocidad espespecífica de consumo de azúcar (h⁻¹)
 
-!!! warning
+-  $V_i$: Velocidad máxima de reacción para el azúcar _i_ (_i_ = G, M o N) (h⁻¹)
 
-	Falta la explicación del resto de parámetros del modelo.
+-  $K_i$: Constante de Michaelis-Menten para el azúcar _i_ (_i_ = G, M o N) (mol/m³)
+
+-  $K_i'$: Constante de inibición para el azúcar _i_ (_i_ = G o M)
+
+-  $R_{X_i}$: Rendimiento estequiométrico de biomasa por mol de azúcar _i_ consumido (_i_ = G, M o N)
+
+-  $R_{E_i}$: Rendimiento estequiométrico de etanol por mol de azúcar _i_ consumido (_i_ = G, M o N)
+
+-  $C_p$: Calor específico de la muestra (kJ kg⁻¹ K⁻¹)
+
+-  $\rho$: Densidad de la mezcla (kg/m³)
+
+-  $\Delta H_{F_i}$: Calor de reacción (_i_ = G, M o N) (kJ/mol)
+
+-  $u$: Variable de control (velocidad de enfrieamiento del fermentador) ( kJ h⁻¹ m⁻² K⁻¹)
+
+-  $T_c$: Temperatura del refrigerante (°C)
+
+-  $V_{i_0}$: Factor de frecuencia para la velocidad máxima (h⁻¹)
+
+-  $k_{i0}$: Factor de frecuencia para la constante de Michaelis (mol/m³)
+
+-  $k_{i0}'$: Factor de frecuencia para la constante de inhibición (mol/m³)
+
+-  $E_{V_i}$: Energía de activación para la velocidad máxima (cal/mol)
+
+-  $E_{K_i}$: Energía de activación para la constante de Michaelis (cal/mol)
+
+-  $E_{K_i'}$: Energía de activación para la constante de inhibición (cal/mol)
 """
 
 # ╔═╡ 02bf4118-6d7e-46a1-a0e2-b1058d43c6ce
@@ -86,15 +122,15 @@ Ya tenemos todas las ecuaciones que queremos resolver numéricamente para poder 
 
 En primer lugar, cargaremos los paquetes necesarios. Son los siguientes:
 
-- **ModelingToolkit.jl**: Lo utilizaremos para programar las ecuaciones simbólicamente. Además simplificará automáticamente el modelo para que sea más sencillo de resolver. También calculará el jacobiano del modelo automáticamente para que la simulación funciones mejor desde un punto de vista numérico.
+- [**ModelingToolkit.jl**](https://github.com/SciML/ModelingToolkit.jl): Lo utilizaremos para programar las ecuaciones simbólicamente. Además simplificará automáticamente el modelo para que sea más sencillo de resolver. También calculará el jacobiano del modelo automáticamente para que la simulación funciones mejor desde un punto de vista numérico.
 
-- **DifferentialEquations.jl**: Una vez tengamos el modelo preparalo, esta libería nos permitirá resolver el sistema de ecuaciones diferenciales con solo un part de líneas de código.
+- [**DifferentialEquations.jl**](https://github.com/SciML/DifferentialEquations.jl): Una vez tengamos el modelo preparalo, esta libería nos permitirá resolver el sistema de ecuaciones diferenciales con solo un part de líneas de código.
 
-- **Plots.jl**: Para representar gráficamente las soluciones de la simulación.
+- [**Plots.jl**](https://github.com/JuliaPlots/Plots.jl): Para representar gráficamente las soluciones de la simulación.
 
-- **Unitful.jl**: Preocuparse de la unidades es siempre un dolor de cabeza. Este paquete relizará los factores de conversión por nosotros, para asegurarnos que trabajamos en el SI. En la referencia del modelo hay una mezcla de kJ y kcal, por ejemplo.
+- [**Unitful.jl**](https://github.com/PainterQubits/Unitful.jl): Preocuparse de la unidades es siempre un dolor de cabeza. Este paquete relizará los factores de conversión por nosotros, para asegurarnos que trabajamos en el SI. En la referencia del modelo hay una mezcla de kJ y kcal, por ejemplo.
 
-- **PlutoUI.jl**: Nos permitirá crear un interface muy sencillo para explorar la solución.
+- [**PlutoUI.jl**](https://github.com/JuliaPluto/PlutoUI.jl): Nos permitirá crear un interface muy sencillo para explorar la solución.
 
 !!! warning
 
@@ -123,7 +159,7 @@ El siguiente paso es definir los parámetros del modelo matemático. Es importan
 """
 
 # ╔═╡ 45c2a6c0-236c-4f9a-b971-ed4c1f506475
-@parameters V_Go V_Mo V_No K_Go K_Mo K_No K´_Go K´_Mo Ea_VG Ea_VM Ea_VN  Ea_KG  Ea_KM Ea_KN Ea_K´G Ea_K´M R_Xg R_Xm R_Xn R_Eg R_Em R_En X₀ G₀ M₀ N₀ E₀ T₀ H_G H_M H_N u Tc ρ Cp R
+@parameters V_Go V_Mo V_No K_Go K_Mo K_No K´_Go K´_Mo Ea_VG Ea_VM Ea_VN  Ea_KG  Ea_KM Ea_KN Ea_K´G Ea_K´M Y_Xg Y_Xm Y_Xn Y_Eg Y_Em Y_En X₀ G₀ M₀ N₀ E₀ T₀ H_G H_M H_N u Tc ρ Cp R
 
 # ╔═╡ 2acd3464-1be3-4e50-bb51-a44fe0be0482
 md"""
@@ -146,7 +182,7 @@ arr(A, Ea, T) = A*exp(-Ea/(R*T))
 
 # ╔═╡ fa19f0dc-21db-4e91-874d-a6e9961146e0
 md"""
-Con estas funciones auxiliares ya podemos definicr las cinéticas de metabolización de los azúcares (ecs. 4 a 6 del modelo):
+Con estas funciones auxiliares ya podemos definir las velocidades específicas de consumo de los azúcares (ecs. 4 a 6 del modelo):
 """
 
 # ╔═╡ 96067665-d64b-4a30-a47b-a54a1ee353c8
@@ -199,8 +235,8 @@ Es importante destacar que cuando se escriben las ecuaciones hay que utilizar `~
 	D(G) ~ -μ₁(T)*X,
 	D(M) ~ -μ₂(T)*X,
 	D(N) ~ -μ₃(T)*X,
-	X ~ X₀ + R_Xg*(G₀-G) + R_Xm*(M₀-M) + R_Xn*(N₀-N),
-	E ~ R_Eg*(G₀-G) + R_Em*(M₀-M) + R_En*(N₀-N),
+	X ~ X₀ + Y_Xg*(G₀-G) + Y_Xm*(M₀-M) + Y_Xn*(N₀-N),
+	E ~ Y_Eg*(G₀-G) + Y_Em*(M₀-M) + Y_En*(N₀-N),
 	D(T) ~ 1/(ρ*Cp)*(H_G*D(G) + H_M*D(M) + H_N*D(N) - u*(T-Tc))
 ])
 
@@ -231,42 +267,42 @@ Empezaremos definiendo todas las constantes del modelo junto con sus unidades, s
 """
 
 # ╔═╡ f97cc6f9-adda-4c50-ab5b-c4b0c7437f7a
-p = [V_Go => exp(35.77)*u"hr^-1" |>ustrip,
-	V_Mo => exp(16.40)*u"hr^-1" |>ustrip,
-	V_No => exp(10.59)*u"hr^-1" |>ustrip,
-	K_Go => exp(-121.3)*u"mol/m^3" |>ustrip,
-	K_Mo => exp(-19.15)*u"mol/m^3" |>ustrip,
-	K_No => exp(-26.78)*u"mol/m^3" |>ustrip,
-	K´_Go => exp(23.33)*u"mol/m^3" |>ustrip,
-	K´_Mo => exp(55.61)*u"mol/m^3" |>ustrip,
-	Ea_VG => 22.6u"kcal/mol" |> upreferred |>ustrip,
-	Ea_VM => 11.3u"kcal/mol" |> upreferred |>ustrip,
-	Ea_VN => 7.16u"kcal/mol" |> upreferred |>ustrip,
-	Ea_KG => -68.6u"kcal/mol" |> upreferred |>ustrip,
-	Ea_KM => -14.4u"kcal/mol" |> upreferred |>ustrip,
-	Ea_KN => -19.9u"kcal/mol" |> upreferred |>ustrip,
-	Ea_K´G => 10.2u"kcal/mol" |> upreferred |>ustrip,
-	Ea_K´M => 26.3u"kcal/mol" |> upreferred |>ustrip,
-	R_Xg =>0.134,
-	R_Xm => 0.268,
-	R_Xn => 0.402,
-	R_Eg => 1.92,
-	R_Em => 3.84,
-	R_En => 5.76,
-	X₀ => 125u"mol/m^3" |>ustrip,
-	G₀ => 70u"mol/m^3" |>ustrip,
-	M₀ => 40u"mol/m^3" |>ustrip,
-	N₀ => 220u"mol/m^3" |>ustrip,
-	E₀ => 0u"mol/m^3" |>ustrip,
-	T₀ => 8u"°C" |> u"K" |>ustrip,
-	H_G => -91.2u"kJ/mol" |> upreferred |>ustrip,
-	H_M => -226.3u"kJ/mol" |> upreferred |>ustrip,
-	H_N => -361.3u"kJ/mol" |> upreferred |>ustrip,
-	u => 2000u"J/(hr*m^3*K)" |>ustrip,
-	Tc => -2u"°C" |> u"K" |>ustrip,
-	ρ => 1040u"kg/m^3" |>ustrip,
-	Cp => 4016u"J/kg/K" |>ustrip,
-	R => 1u"R" |>ustrip]
+p = [V_Go => exp(35.77)*u"hr^-1" |> ustrip,
+	V_Mo => exp(16.40)*u"hr^-1" |> ustrip,
+	V_No => exp(10.59)*u"hr^-1" |> ustrip,
+	K_Go => exp(-121.3)*u"mol/m^3" |> ustrip,
+	K_Mo => exp(-19.15)*u"mol/m^3" |> ustrip,
+	K_No => exp(-26.78)*u"mol/m^3" |> ustrip,
+	K´_Go => exp(23.33)*u"mol/m^3" |> ustrip,
+	K´_Mo => exp(55.61)*u"mol/m^3" |> ustrip,
+	Ea_VG => 22.6u"kcal/mol" |> upreferred |> ustrip,
+	Ea_VM => 11.3u"kcal/mol" |> upreferred |> ustrip,
+	Ea_VN => 7.16u"kcal/mol" |> upreferred |> ustrip,
+	Ea_KG => -68.6u"kcal/mol" |> upreferred |> ustrip,
+	Ea_KM => -14.4u"kcal/mol" |> upreferred |> ustrip,
+	Ea_KN => -19.9u"kcal/mol" |> upreferred |> ustrip,
+	Ea_K´G => 10.2u"kcal/mol" |> upreferred |> ustrip,
+	Ea_K´M => 26.3u"kcal/mol" |> upreferred |> ustrip,
+	Y_Xg =>0.134,
+	Y_Xm => 0.268,
+	Y_Xn => 0.402,
+	Y_Eg => 1.92,
+	Y_Em => 3.84,
+	Y_En => 5.76,
+	X₀ => 125u"mol/m^3" |> ustrip,
+	G₀ => 70u"mol/m^3" |> ustrip,
+	M₀ => 40u"mol/m^3" |> ustrip,
+	N₀ => 220u"mol/m^3" |> ustrip,
+	E₀ => 0u"mol/m^3" |> ustrip,
+	T₀ => 8u"°C" |> u"K" |> ustrip,
+	H_G => -91.2u"kJ/mol" |> upreferred |> ustrip,
+	H_M => -226.3u"kJ/mol" |> upreferred |> ustrip,
+	H_N => -361.3u"kJ/mol" |> upreferred |> ustrip,
+	u => 2000u"J/(hr*m^3*K)" |> ustrip,
+	Tc => -2u"°C" |> u"K" |> ustrip,
+	ρ => 1040u"kg/m^3" |> ustrip,
+	Cp => 4016u"J/kg/K" |> ustrip,
+	R => 1u"R" |> ustrip]
 
 # ╔═╡ d26904a2-55d4-4784-a6a5-382e813ce4b5
 md"""
@@ -324,6 +360,11 @@ Las variables $E$ y $X$ no aparecen en el modelo simplificado y, por lo tanto, t
 
 # ╔═╡ 67d35fd0-dbd6-4d73-bdce-2a6a7372c117
 plot(sol, idxs=[X E], legend=:topleft)
+
+# ╔═╡ 7864b778-b29d-47b6-a2c6-6d3d35b25be7
+md"""
+También podemos ver como evoluciona la temperatura del fermentador:
+"""
 
 # ╔═╡ 6548872c-d52e-4a38-a20f-1d74bdebd224
 plot(sol, idxs=T, legend=:bottomright)
@@ -2250,7 +2291,6 @@ version = "1.4.1+0"
 """
 
 # ╔═╡ Cell order:
-# ╟─4e6362ba-89e0-4ae5-b04d-9ff0dfe78f5f
 # ╠═d654cb26-f5e6-4848-a67d-13448e4a40eb
 # ╟─65be7870-4d71-47a4-91fc-2de058c21d95
 # ╟─7312c6cd-5eb3-4f19-a8dc-e4ea0e824b34
@@ -2299,6 +2339,7 @@ version = "1.4.1+0"
 # ╠═04ecbf45-62a6-4a52-9f1f-993b861d7e21
 # ╟─35b5f795-c37d-46a9-8c16-c5f5f26da4ae
 # ╠═67d35fd0-dbd6-4d73-bdce-2a6a7372c117
+# ╟─7864b778-b29d-47b6-a2c6-6d3d35b25be7
 # ╠═6548872c-d52e-4a38-a20f-1d74bdebd224
 # ╟─e620dae4-3e0f-497f-bb16-1ab31f9ea7d8
 # ╠═9f7eda20-87f1-4ae6-b9bc-dbb3f314cf67
