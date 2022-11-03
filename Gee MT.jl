@@ -26,6 +26,10 @@ md"""
 
 J. Arántegui
 
+_Comentarios, preguntas...:_ 🐘: [@runjaj@mastodon.social](https://mastodon.social/@runjaj) ---- 🐦: [@runjaj](https://twitter.com/runjaj) ---- Github: [Blog](https://github.com/runjaj/blog)
+
+3 de Noviembre de 2022
+
 ## Resumen
 
 En este artículo vamos a ver como se puede simular de una manera muy sencilla la fermentación de cerveza en estado no estacionario, es decir, por lotes. El modelo utiliza tres ecuaciones diferencialeçs ordinarias para describir la evolución de la glucosa, maltosa y maltotriosa. Las cinéticas de crecimiento siguen cinéticas de Monod y las constantes cinéticas siguen la ecuación de Arrhenius. Además se realzia el balance macroscópico de energía.
@@ -159,7 +163,7 @@ El siguiente paso es definir los parámetros del modelo matemático. Es importan
 """
 
 # ╔═╡ 45c2a6c0-236c-4f9a-b971-ed4c1f506475
-@parameters V_Go V_Mo V_No K_Go K_Mo K_No K´_Go K´_Mo Ea_VG Ea_VM Ea_VN  Ea_KG  Ea_KM Ea_KN Ea_K´G Ea_K´M Y_Xg Y_Xm Y_Xn Y_Eg Y_Em Y_En X₀ G₀ M₀ N₀ E₀ T₀ H_G H_M H_N u Tc ρ Cp R
+@parameters V_Go V_Mo V_No K_Go K_Mo K_No K´_Go K´_Mo Ea_VG Ea_VM Ea_VN  Ea_KG  Ea_KM Ea_KN Ea_K´G Ea_K´M R_Xg R_Xm R_Xn R_Eg R_Em R_En X₀ G₀ M₀ N₀ E₀ T₀ H_G H_M H_N u Tc ρ Cp R
 
 # ╔═╡ 2acd3464-1be3-4e50-bb51-a44fe0be0482
 md"""
@@ -235,8 +239,8 @@ Es importante destacar que cuando se escriben las ecuaciones hay que utilizar `~
 	D(G) ~ -μ₁(T)*X,
 	D(M) ~ -μ₂(T)*X,
 	D(N) ~ -μ₃(T)*X,
-	X ~ X₀ + Y_Xg*(G₀-G) + Y_Xm*(M₀-M) + Y_Xn*(N₀-N),
-	E ~ Y_Eg*(G₀-G) + Y_Em*(M₀-M) + Y_En*(N₀-N),
+	X ~ X₀ + R_Xg*(G₀-G) + R_Xm*(M₀-M) + R_Xn*(N₀-N),
+	E ~ R_Eg*(G₀-G) + R_Em*(M₀-M) + R_En*(N₀-N),
 	D(T) ~ 1/(ρ*Cp)*(H_G*D(G) + H_M*D(M) + H_N*D(N) - u*(T-Tc))
 ])
 
@@ -283,12 +287,12 @@ p = [V_Go => exp(35.77)*u"hr^-1" |> ustrip,
 	Ea_KN => -19.9u"kcal/mol" |> upreferred |> ustrip,
 	Ea_K´G => 10.2u"kcal/mol" |> upreferred |> ustrip,
 	Ea_K´M => 26.3u"kcal/mol" |> upreferred |> ustrip,
-	Y_Xg =>0.134,
-	Y_Xm => 0.268,
-	Y_Xn => 0.402,
-	Y_Eg => 1.92,
-	Y_Em => 3.84,
-	Y_En => 5.76,
+	R_Xg =>0.134,
+	R_Xm => 0.268,
+	R_Xn => 0.402,
+	R_Eg => 1.92,
+	R_Em => 3.84,
+	R_En => 5.76,
 	X₀ => 125u"mol/m^3" |> ustrip,
 	G₀ => 70u"mol/m^3" |> ustrip,
 	M₀ => 40u"mol/m^3" |> ustrip,
@@ -374,7 +378,18 @@ md"""
 ## Exploración interactiva
 
 !!! warning
-	Esto no puede aparece aquí, ya que es una página estática. Tengo que ver como mostrar la interactivadad.
+	Esto no puede aparece aquí, ya que es una página estática. Para poder ver la interacción, lo mejor es decargar el _notebook_ utilizando el botón del inicio de la página y ejecutarlo.
+"""
+
+# ╔═╡ 4e3632a8-748d-4de2-8b5d-29424de5956c
+md"""
+Vamos a ver qué pasa cuando manipulamos la variable de control $u$. Para esto crearemos una nueva función, que hace los siguiente:
+
+1. Modifica el valor del parámetro _u_
+
+2. Realiza la simulación con las nuevas condiciones (¡de manera prácticamente instantánea!)
+
+3. Representa las concentraciones de biomasa de la nueva simulación y las de la simulación obtenida más arriba
 """
 
 # ╔═╡ 9f7eda20-87f1-4ae6-b9bc-dbb3f314cf67
@@ -385,26 +400,18 @@ function newsimul(u)
 	plot!(sol, idxs=[X E])
 end
 
+# ╔═╡ a1729dda-3a32-432e-a0c6-2c75576bbbcb
+md"""
+Lo bueno es que con _PlutoUI.jl_ de manera muy sencilla podemos crear un deslizado que nos permite explorar la simulación de manera muy intuitiva. Cada vez que modifiquemos el valor de $u$ con el deslizador se ejecuta la función `newsimul` y se actualiza el gráfico.
+"""
+
 # ╔═╡ 2da9ccb1-6a3f-4b9d-a6d5-aff178b308a7
 md"""
-u = $(@bind unew Slider(0:100:2400, show_value=true))
+_u_ = $(@bind unew Slider(0:400:2400, show_value=true))
 """
 
 # ╔═╡ 83232adf-f1f6-417e-9236-5e6b1acdbe6a
 newsimul(unew)
-
-# ╔═╡ e29444c0-bbca-453e-918b-94bd66f91c02
-md"""
----
-
-Celdas a eliminar (seguramente):
-"""
-
-# ╔═╡ a71b0cd3-598e-4a46-a5b0-a27f681d2150
-# @variables t [unit = u"hr"] G(t) [unit = u"mol/m^3"] M(t) [unit = u"mol/m^3"] N(t) [unit = u"mol/m^3"] X(t) [unit = u"mol/m^3"] E(t) [unit = u"mol/m^3"] T(t) [unit = u"K"]
-
-# ╔═╡ 150f4a4f-3391-4d84-a4f5-dec18aed4ad1
-# @parameters V_Go [unit = u"hr^-1"] V_Mo [unit = u"hr^-1"] V_No [unit = u"hr^-1"] K_Go [unit = u"mol/m^3"] K_Mo [unit = u"mol/m^3"] K_No [unit = u"mol/m^3"] K´_Go [unit = u"mol/m^3"] K´_Mo [unit = u"mol/m^3"] Ea_VG [unit = u"J/mol"] Ea_VM [unit = u"J/mol"] Ea_VN [unit = u"J/mol"] Ea_KG [unit = u"J/mol"] Ea_KM [unit = u"J/mol"] Ea_KN [unit = u"J/mol"] Ea_K´G [unit = u"J/mol"] Ea_K´M [unit = u"J/mol"] R_Xg R_Xm R_Xn R_Eg R_Em R_En X₀ [unit = u"mol/m^3"] G₀ [unit = u"mol/m^3"] M₀ [unit = u"mol/m^3"] N₀ [unit = u"mol/m^3"] E₀ [unit = u"mol/m^3"] T₀ [unit = u"K"] H_G [unit = u"J/mol"] H_M [unit = u"J/mol"] H_N [unit = u"J/mol"] u [unit = u"J/(hr*m^3*K)"] Tc [unit = u"K"] ρ [unit = u"kg/m^3"] Cp [unit = u"J/kg/K"] R [unit = u"J/K/mol"]
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2342,11 +2349,10 @@ version = "1.4.1+0"
 # ╟─7864b778-b29d-47b6-a2c6-6d3d35b25be7
 # ╠═6548872c-d52e-4a38-a20f-1d74bdebd224
 # ╟─e620dae4-3e0f-497f-bb16-1ab31f9ea7d8
+# ╟─4e3632a8-748d-4de2-8b5d-29424de5956c
 # ╠═9f7eda20-87f1-4ae6-b9bc-dbb3f314cf67
-# ╟─2da9ccb1-6a3f-4b9d-a6d5-aff178b308a7
+# ╟─a1729dda-3a32-432e-a0c6-2c75576bbbcb
+# ╠═2da9ccb1-6a3f-4b9d-a6d5-aff178b308a7
 # ╠═83232adf-f1f6-417e-9236-5e6b1acdbe6a
-# ╟─e29444c0-bbca-453e-918b-94bd66f91c02
-# ╠═a71b0cd3-598e-4a46-a5b0-a27f681d2150
-# ╠═150f4a4f-3391-4d84-a4f5-dec18aed4ad1
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
